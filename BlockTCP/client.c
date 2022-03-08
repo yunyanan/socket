@@ -22,7 +22,7 @@
  * @return On success, a file descriptor for the new socket is returned.
  *		   On error, negative number of the error line number
  */
-static int connect_server(const char *ip_str, const char *port_str)
+static int client_connect_server(const char *ip_str, const char *port_str)
 {
 	struct sockaddr_in servaddr;
 	uint16_t port;
@@ -44,19 +44,19 @@ static int connect_server(const char *ip_str, const char *port_str)
 	if (inet_pton(AF_INET, ip_str, &servaddr.sin_addr) <= 0) {
 		CLIENT_PRINT("IP %s conversion failed, %s", ip_str, strerror(errno));
 		ret = -CLIENT_ERRNO;
-		goto label_connect_server;
+		goto label_client_connect_server;
 	}
 
 	/* Connect to the server, three handshakes right here */
 	if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in)) < 0) {
 		CLIENT_PRINT("Connect failed, %s", strerror(errno));
 		ret = -CLIENT_ERRNO;
-		goto label_connect_server;
+		goto label_client_connect_server;
 	}
 	CLIENT_PRINT("create ok");
 
 	return sockfd;
-label_connect_server:
+label_client_connect_server:
 	if (sockfd > 0) {
 		close(sockfd);
 		sockfd = -1;
@@ -73,7 +73,7 @@ label_connect_server:
  *
  * @return On success, return the length of the sent.
  */
-static int send_message(int sockfd, struct common_buff *sbuf)
+static int client_send_message(int sockfd, struct common_buff *sbuf)
 {
 	uint32_t slen;
 	int ret;
@@ -81,7 +81,7 @@ static int send_message(int sockfd, struct common_buff *sbuf)
 	/* clear send buff */
 	memset(sbuf->data, 0x00, sbuf->len);
 
-	printf("< ");
+	printf("TX> ");
 
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, sbuf->len, stdin);
@@ -97,6 +97,7 @@ static int send_message(int sockfd, struct common_buff *sbuf)
 		CLIENT_PRINT("write failed, %s", strerror(errno));
 		return -CLIENT_ERRNO;
 	}
+	/* CLIENT_PRINT("send %d bytes data", ret); */
 
 	return ret;
 }
@@ -109,7 +110,7 @@ static int send_message(int sockfd, struct common_buff *sbuf)
  *
  * @return On success, return the length of the sent.
  */
-static int recv_message(int sockfd, struct common_buff *sbuf)
+static int client_recv_message(int sockfd, struct common_buff *sbuf)
 {
 	void *rptr;
 	uint32_t rlen;
@@ -127,21 +128,24 @@ static int recv_message(int sockfd, struct common_buff *sbuf)
 			CLIENT_PRINT("server closed connection");
 			return 0;
 		}
-		sbuf->len = ntohl(sbuf->len);
-		if (sbuf->len == 0) {
-			/* data illegal */
-			CLIENT_PRINT("no data read from the server");
-			break;
-		} else if (sbuf->len > DATA_MAX_LEN) {
-			CLIENT_PRINT("data error!!!");
-			return -CLIENT_ERRNO;
+
+		if (count == 2) {
+			sbuf->len = ntohl(sbuf->len);
+			if (sbuf->len == 0) {
+				/* data illegal */
+				CLIENT_PRINT("no data read from the server");
+				break;
+			} else if (sbuf->len > DATA_MAX_LEN) {
+				CLIENT_PRINT("data error!!!");
+				return -CLIENT_ERRNO;
+			}
 		}
 
 		rptr = &sbuf->data;
 		rlen = sbuf->len;
-	} while ((count--) > 0);
+	} while ((--count) > 0);
 
-	printf("> %s", sbuf->data);
+	printf("RX> %s", sbuf->data);
 
 	return rlen;
 }
@@ -170,7 +174,7 @@ int main(int argc, char *argv[])
 	port_str = argv[2];
 	CLIENT_PRINT("addr: %s:%s", ip_str, port_str);
 
-	sockfd = connect_server(ip_str, port_str);
+	sockfd = client_connect_server(ip_str, port_str);
 	if (sockfd < 0) {
 		CLIENT_PRINT("connect server failed, %d", sockfd);
 		return -CLIENT_ERRNO;
@@ -178,11 +182,11 @@ int main(int argc, char *argv[])
 
 	while (1) {
 		buff->len = DATA_MAX_LEN;
-		if (send_message(sockfd, buff) < 0) {
+		if (client_send_message(sockfd, buff) < 0) {
 			break;
 		}
 
-		if (recv_message(sockfd, buff) <= 0) {
+		if (client_recv_message(sockfd, buff) <= 0) {
 			break;
 		}
 	}
