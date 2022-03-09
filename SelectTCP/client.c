@@ -93,20 +93,8 @@ static int client_connect_server(const char *ip_str, const char *port_str)
 		}
 
 		if (FD_ISSET(sockfd, &rfds) || FD_ISSET(sockfd, &wfds)) {
-			if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &len) < 0) {
-				CLIENT_PRINT("get socket error info failed, %s", strerror(errno));
-				ret = -CLIENT_ERRNO;
-				continue;
-			}
-			if (err != 0) {
-				CLIENT_PRINT("connect failed, %s", strerror(errno));
-				ret = -CLIENT_ERRNO;
-				continue;
-			}
-
 			connect(sockfd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in));
-			err = errno;
-			if (err == EISCONN) {
+			if (errno == EISCONN) {
 				CLIENT_PRINT("connect ok");
 				return sockfd;
 			}
