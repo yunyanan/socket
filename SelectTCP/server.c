@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #include "common.h"
 
@@ -34,6 +35,7 @@ static int server_listen_connection(const char *port_str)
 	struct sockaddr_in servaddr;
 	uint16_t port;
 	int sockfd;
+	int flags;
 	int ret;
 	int on = 1;
 
@@ -44,6 +46,10 @@ static int server_listen_connection(const char *port_str)
 		return -SERVER_ERRNO;
 	}
 	SERVER_PRINT("create ok");
+
+	flags = fcntl(sockfd, F_GETFL, 0);
+	/* set non-blocking mode */
+	fcntl(sockfd, F_SETFL, flags|O_NONBLOCK);
 
 	port = atoi(port_str);
 	bzero(&servaddr, sizeof(struct sockaddr_in));
@@ -80,7 +86,8 @@ label_server_listen_connection:
  * Receive a message from the client
  *
  * @para[in] clientfd	client connection file descriptor
- * @para[in] sbuf		send buff pointer
+ * @para[in] sbuf		recv buff pointer
+ * @para[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */
@@ -95,8 +102,11 @@ static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t 
 	do {
 		ret = read(clientfd, &rptr[rlen], buff_len - rlen);
 		if (ret < 0) {
-			SERVER_PRINT("read failed, %s", strerror(errno));
-			return -SERVER_ERRNO;
+			if (errno != EAGAIN) {
+				SERVER_PRINT("read failed, %d, %s", errno, strerror(errno));
+				return -SERVER_ERRNO;
+			}
+			break;
 		} else if (ret == 0) {
 			SERVER_PRINT("client closed connection");
 			return 0;
@@ -104,7 +114,7 @@ static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t 
 		rlen += ret;
 	} while (ret > 0);
 
-	SERVER_PRINT("RX> %s", sbuf->data);
+	SERVER_PRINT("RX[%04d]> %s", rlen, sbuf->data);
 
 	return rlen;
 }
@@ -114,6 +124,7 @@ static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t 
  *
  * @para[in] clientfd	client connection file descriptor
  * @para[in] sbuf		send buff pointer
+ * @para[in] buff_len	send buff size
  *
  * @return On success, return the length of the sent.
  */
@@ -125,10 +136,12 @@ static int server_send_message(int clientfd, struct common_buff *sbuf, uint16_t 
 	/* clear send buff */
 	memset(sbuf->data, 0x00, buff_len);
 
-	SERVER_PRINT("TX> ");
-
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
+	slen = strlen((char *)sbuf->data);
+	if (slen > 0) {
+		sbuf->data[slen - 1] = '\0';
+	}
 	slen = strlen((char *)sbuf->data);
 
 	/* send to server */
@@ -138,24 +151,29 @@ static int server_send_message(int clientfd, struct common_buff *sbuf, uint16_t 
 		SERVER_PRINT("write failed, %s", strerror(errno));
 		return -SERVER_ERRNO;
 	}
+	SERVER_PRINT("TX[%04d]> %s", ret, sbuf->data);
 
 	return ret;
 }
 
+/**
+ * Select the client number to send the message to
+ *
+ * @para[in] client_info	Client Connection Info
+ *
+ * @return On success, return the index of the client
+ */
 static int server_select_client(struct client_connect_info *client_info)
 {
 	char index[5+1] = {0};
-	int i;
-
-	SERVER_PRINT("select a client:");
-	for (i=0; i<MAX_CLIENTS; i++) {
-		if (client_info[i].fd > 0) {
-			SERVER_PRINT("%d. %s:%d", i, inet_ntoa(client_info[i].clientaddr.sin_addr),
-						 client_info[i].clientaddr.sin_port);
-		}
-	}
+	int i, len;
 
 	fgets(index, sizeof(char)*5, stdin);
+	len = strlen(index);
+	if (len > 0) {
+		index[len - 1] = '\0';	/* delete \n */
+	}
+
 	i = atoi(index);
 	if ((i >= MAX_CLIENTS) || (client_info[i].fd <= 0)) {
 		SERVER_PRINT("input error.");
@@ -213,15 +231,19 @@ int main(int argc, char *argv[])
 		FD_SET(sockfd, &fds);
 		maxfd = sockfd;
 
+		SERVER_PRINT("Select a client to send a message:");
 		for (i=0,check_cnt=0; (i<MAX_CLIENTS) && (check_cnt < connect_cnt); i++) {
 			if (client_info[i].fd > 0) {
 				FD_SET(client_info[i].fd, &fds);
+				SERVER_PRINT("Client %d: %s:%d", i, inet_ntoa(client_info[i].clientaddr.sin_addr),
+							 client_info[i].clientaddr.sin_port);
 				if (client_info[i].fd > maxfd) {
 					maxfd = client_info[i].fd;
 					check_cnt++;
 				}
 			}
 		}
+		SERVER_PRINT("---------------------------------\n");
 
 		ret = select(maxfd+1, &fds, NULL, NULL, &timeout);
 		if (ret < 0) {
@@ -260,6 +282,10 @@ int main(int argc, char *argv[])
 					SERVER_PRINT("accpet a new client: %s:%d", inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port);
 					for (i=0; i<MAX_CLIENTS; i++) {
 						if (client_info[i].fd <= 0) {
+							int flags = fcntl(connfd, F_GETFL, 0);
+							/* set non-blocking mode */
+							fcntl(connfd, F_SETFL, flags|O_NONBLOCK);
+
 							client_info[i].fd = connfd;
 							client_info[i].clientaddr = clientaddr;
 							connect_cnt ++;
@@ -270,14 +296,15 @@ int main(int argc, char *argv[])
 			}
 
 			for (i=0, check_cnt=0, close_cnt=0; (i<MAX_CLIENTS) && (check_cnt < connect_cnt); i++) {
-				if (FD_ISSET(client_info[i].fd, &fds)) {
+				if ((client_info[i].fd > 0) && (FD_ISSET(client_info[i].fd, &fds))) {
 					check_cnt++;
+					SERVER_PRINT("From client %s:%d.", inet_ntoa(client_info[i].clientaddr.sin_addr),
+								 client_info[i].clientaddr.sin_port);
 					if (server_recv_message(client_info[i].fd, buff, blen) <= 0) {
 						close(client_info[i].fd);
 						client_info[i].fd = 0;
 						close_cnt++;
-						SERVER_PRINT("connect %s:%d closed.",
-									 inet_ntoa(client_info[i].clientaddr.sin_addr),
+						SERVER_PRINT("connect %s:%d closed.", inet_ntoa(client_info[i].clientaddr.sin_addr),
 									 client_info[i].clientaddr.sin_port);
 					}
 				}

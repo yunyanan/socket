@@ -33,8 +33,6 @@ static int client_connect_server(const char *ip_str, const char *port_str)
 	struct timeval timeout;
 	int ret;
 	int recon_cnt;
-	int err;
-	socklen_t len;
 
 	/* Creating a socket descriptor  */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -93,6 +91,7 @@ static int client_connect_server(const char *ip_str, const char *port_str)
 		}
 
 		if (FD_ISSET(sockfd, &rfds) || FD_ISSET(sockfd, &wfds)) {
+			/* Re-judge the connection result */
 			connect(sockfd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in));
 			if (errno == EISCONN) {
 				CLIENT_PRINT("connect ok");
@@ -115,7 +114,7 @@ label_client_connect_server:
 /**
  * Send a message to the server
  *
- * @para[in] sockfd		file descriptor
+ * @para[in] sockfd		socket file descriptor
  * @para[in] sbuf		send buff pointer
  * @para[in] buff_len	send buff size
  *
@@ -131,6 +130,10 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
+	slen = strlen((char *)sbuf->data);
+	if (slen > 0) {
+		sbuf->data[slen - 1] = '\0'; /* delete \n */
+	}
 	slen = strlen((char *)sbuf->data);
 
 	/* send to server */
@@ -149,8 +152,9 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 /**
  * Receive a message from the server
  *
- * @para[in] sockfd		file descriptor
- * @para[in] sbuf		send buff pointer
+ * @para[in] sockfd		socket file descriptor
+ * @para[in] sbuf		recv buff pointer
+ * @para[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */
@@ -165,8 +169,11 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 	do {
 		ret = read(sockfd, &ptr[rlen], buff_len - rlen);
 		if (ret < 0) {
-			CLIENT_PRINT("read failed, %s", strerror(errno));
-			return -CLIENT_ERRNO;
+			if (errno != EAGAIN) {
+				CLIENT_PRINT("read failed, %s", strerror(errno));
+				return -CLIENT_ERRNO;
+			}
+			break;
 		} else if (ret == 0) {
 			CLIENT_PRINT("server closed connection");
 			return 0;
@@ -174,7 +181,7 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 		rlen += ret;
 	} while ((ret > 0) && (rlen < buff_len));
 
-	CLIENT_PRINT("RX> %s", sbuf->data);
+	CLIENT_PRINT("RX[%04d]> %s", rlen, sbuf->data);
 
 	return rlen;
 }
