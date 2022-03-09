@@ -14,3 +14,4 @@ add_definitions(-Wall)
 
 # Add subdirectory
 add_subdirectory(BlockTCP/)
+add_subdirectory(SelectTCP/)
