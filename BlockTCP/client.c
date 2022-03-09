@@ -81,11 +81,12 @@ static int client_send_message(int sockfd, struct common_buff *sbuf)
 	/* clear send buff */
 	memset(sbuf->data, 0x00, sbuf->len);
 
-	printf("TX> ");
-
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, sbuf->len, stdin);
-
+	sbuf->len = strlen((char *)sbuf->data);
+	if (sbuf->len > 0) {
+		sbuf->data[sbuf->len - 1] = '\0'; /* delete \n */
+	}
 	sbuf->len = strlen((char *)sbuf->data);
 	slen = sizeof(struct common_buff) + sbuf->len;
 
@@ -97,6 +98,7 @@ static int client_send_message(int sockfd, struct common_buff *sbuf)
 		CLIENT_PRINT("write failed, %s", strerror(errno));
 		return -CLIENT_ERRNO;
 	}
+	CLIENT_PRINT("TX[%04d]> %s", ret, sbuf->data); /* The data sent contains 'sbuf->len', so 'ret = strlen(sbuf->data) + sizeof(sbuf->len)' */
 	/* CLIENT_PRINT("send %d bytes data", ret); */
 
 	return ret;
@@ -145,7 +147,7 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf)
 		rlen = sbuf->len;
 	} while ((--count) > 0);
 
-	printf("RX> %s", sbuf->data);
+	CLIENT_PRINT("RX[%04d]> %s", rlen, sbuf->data);
 
 	return rlen;
 }
