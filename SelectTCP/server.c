@@ -185,14 +185,14 @@ static int server_select_client(struct client_connect_info *client_info)
 
 int main(int argc, char *argv[])
 {
-	const char *port_str;
+	struct client_connect_info client_info[MAX_CLIENTS];
 	struct common_buff *buff;
+	struct timeval timeout;
+	const char *port_str;
 	uint16_t blen;
 	fd_set fds;
-	struct timeval timeout;
-	int sockfd, connfd, maxfd;
+	int sockfd, maxfd;
 	int i, connect_cnt, check_cnt, close_cnt, ret;
-	struct client_connect_info client_info[MAX_CLIENTS];
 
 	struct sockaddr_in clientaddr;
 	socklen_t client_len;
@@ -222,6 +222,9 @@ int main(int argc, char *argv[])
 
 	connect_cnt = 0;
 	memset(client_info, 0x00, sizeof(struct client_connect_info) * MAX_CLIENTS);
+	for (i=0; i<MAX_CLIENTS; i++) {
+		client_info[i].fd = -1;
+	}
 
 	timeout.tv_sec = 5;			/* wait 5s */
 	timeout.tv_usec = 0;
@@ -239,8 +242,8 @@ int main(int argc, char *argv[])
 							 client_info[i].clientaddr.sin_port);
 				if (client_info[i].fd > maxfd) {
 					maxfd = client_info[i].fd;
-					check_cnt++;
 				}
+				check_cnt++;
 			}
 		}
 		SERVER_PRINT("---------------------------------\n");
@@ -260,15 +263,16 @@ int main(int argc, char *argv[])
 				i = server_select_client(client_info);
 				if (i >= 0) {
 					if (server_send_message(client_info[i].fd, buff, blen) < 0) {
+						FD_CLR(fileno(stdin), &fds);
 						close(client_info[i].fd);
-						client_info[i].fd = 0;
+						client_info[i].fd = -1;
 						connect_cnt --;
 					}
 				}
 			}
 
 			if (FD_ISSET(sockfd, &fds)) {
-				connfd = accept(sockfd, (struct sockaddr *)&clientaddr, &client_len);
+				int connfd = accept(sockfd, (struct sockaddr *)&clientaddr, &client_len);
 				if (connfd < 0) {
 					SERVER_PRINT("accept failed, %s", strerror(errno));
 					ret = -SERVER_ERRNO;
@@ -278,6 +282,8 @@ int main(int argc, char *argv[])
 				if (connect_cnt >= MAX_CLIENTS) {
 					SERVER_PRINT("too many connections");
 					close(connfd);
+					connfd = -1;
+					FD_CLR(connfd, &fds);
 				} else {
 					SERVER_PRINT("accpet a new client: %s:%d", inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port);
 					for (i=0; i<MAX_CLIENTS; i++) {
@@ -302,7 +308,8 @@ int main(int argc, char *argv[])
 								 client_info[i].clientaddr.sin_port);
 					if (server_recv_message(client_info[i].fd, buff, blen) <= 0) {
 						close(client_info[i].fd);
-						client_info[i].fd = 0;
+						FD_CLR(client_info[i].fd, &fds);
+						client_info[i].fd = -1;
 						close_cnt++;
 						SERVER_PRINT("connect %s:%d closed.", inet_ntoa(client_info[i].clientaddr.sin_addr),
 									 client_info[i].clientaddr.sin_port);
@@ -316,6 +323,7 @@ int main(int argc, char *argv[])
 	for (i=0; i<MAX_CLIENTS; i++) {
 		if (client_info[i].fd > 0) {
 			close(client_info[i].fd);
+			client_info[i].fd = -1;
 		}
 	}
 
