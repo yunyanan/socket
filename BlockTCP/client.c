@@ -53,7 +53,7 @@ static int client_connect_server(const char *ip_str, const char *port_str)
 		ret = -CLIENT_ERRNO;
 		goto label_client_connect_server;
 	}
-	CLIENT_PRINT("create ok");
+	CLIENT_PRINT("connect ok");
 
 	return sockfd;
 label_client_connect_server:
