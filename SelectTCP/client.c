@@ -114,9 +114,9 @@ label_client_connect_server:
 /**
  * Send a message to the server
  *
- * @para[in] sockfd		socket file descriptor
- * @para[in] sbuf		send buff pointer
- * @para[in] buff_len	send buff size
+ * @param[in] sockfd	socket file descriptor
+ * @param[in] sbuf		send buff pointer
+ * @param[in] buff_len	send buff size
  *
  * @return On success, return the length of the sent.
  */
@@ -152,9 +152,9 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 /**
  * Receive a message from the server
  *
- * @para[in] sockfd		socket file descriptor
- * @para[in] sbuf		recv buff pointer
- * @para[in] buff_len	recv buff size
+ * @param[in] sockfd	socket file descriptor
+ * @param[in] sbuf		recv buff pointer
+ * @param[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */

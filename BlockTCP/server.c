@@ -82,8 +82,8 @@ label_server_accept_client:
 /**
  * Receive a message from the client
  *
- * @para[in] confd		client connection file descriptor
- * @para[in] sbuf		send buff pointer
+ * @param[in] confd		client connection file descriptor
+ * @param[in] sbuf		send buff pointer
  *
  * @return On success, return the length of the sent.
  */
@@ -131,8 +131,8 @@ static int server_recv_message(int connfd, struct common_buff *sbuf)
 /**
  * Send a message to the client
  *
- * @para[in] connfd		client connection file descriptor
- * @para[in] sbuf		send buff pointer
+ * @param[in] connfd	client connection file descriptor
+ * @param[in] sbuf		send buff pointer
  *
  * @return On success, return the length of the sent.
  */

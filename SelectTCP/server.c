@@ -85,9 +85,9 @@ label_server_listen_connection:
 /**
  * Receive a message from the client
  *
- * @para[in] clientfd	client connection file descriptor
- * @para[in] sbuf		recv buff pointer
- * @para[in] buff_len	recv buff size
+ * @param[in] clientfd	client connection file descriptor
+ * @param[in] sbuf		recv buff pointer
+ * @param[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */
@@ -122,9 +122,9 @@ static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t 
 /**
  * Send a message to the client
  *
- * @para[in] clientfd	client connection file descriptor
- * @para[in] sbuf		send buff pointer
- * @para[in] buff_len	send buff size
+ * @param[in] clientfd	client connection file descriptor
+ * @param[in] sbuf		send buff pointer
+ * @param[in] buff_len	send buff size
  *
  * @return On success, return the length of the sent.
  */
@@ -159,7 +159,7 @@ static int server_send_message(int clientfd, struct common_buff *sbuf, uint16_t 
 /**
  * Select the client number to send the message to
  *
- * @para[in] client_info	Client Connection Info
+ * @param[in] client_info	Client Connection Info
  *
  * @return On success, return the index of the client
  */
