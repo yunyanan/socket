@@ -191,6 +191,7 @@ int main(int argc, char *argv[])
 	connfd = server_accept_client(port_str);
 	if (connfd < 0) {
 		SERVER_PRINT("accept client connection failed");
+		free(buff);
 		return -SERVER_ERRNO;
 	}
 
@@ -208,6 +209,10 @@ int main(int argc, char *argv[])
 	if (connfd > 0) {
 		close(connfd);
 		connfd = -1;
+	}
+	if (buff) {
+		free(buff);
+		buff = NULL;
 	}
 
 	SERVER_PRINT("server exit ...");

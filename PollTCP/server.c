@@ -216,6 +216,7 @@ int main(int argc, char *argv[])
 	sockfd = server_listen_connection(port_str);
 	if (sockfd < 0) {
 		SERVER_PRINT("accept client connection failed");
+		free(buff);
 		return -SERVER_ERRNO;
 	}
 
@@ -332,6 +333,10 @@ int main(int argc, char *argv[])
 	if (sockfd > 0) {
 		close(sockfd);
 		sockfd = -1;
+	}
+	if (buff) {
+		free(buff);
+		buff = NULL;
 	}
 
 	SERVER_PRINT("server exit ...");

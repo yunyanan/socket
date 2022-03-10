@@ -213,6 +213,7 @@ int main(int argc, char *argv[])
 	sockfd = client_connect_server(ip_str, port_str);
 	if (sockfd < 0) {
 		CLIENT_PRINT("connect server failed, %d", sockfd);
+		free(buff);
 		return -CLIENT_ERRNO;
 	}
 
@@ -261,6 +262,10 @@ int main(int argc, char *argv[])
 	if (sockfd > 0) {
 		close(sockfd);
 		sockfd = -1;
+	}
+	if (buff) {
+		free(buff);
+		buff = NULL;
 	}
 
 	CLIENT_PRINT("client exit...");
