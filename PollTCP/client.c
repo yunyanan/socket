@@ -27,11 +27,11 @@
 static int client_connect_server(const char *ip_str, const char *port_str)
 {
 	struct sockaddr_in servaddr;
+	struct pollfd pfd;
+	uint32_t timeout;
 	uint16_t port;
 	int sockfd;
 	int flags;
-	struct pollfd pfd;
-	uint32_t timeout;
 	int ret;
 	int recon_cnt;
 
@@ -185,10 +185,10 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 
 int main(int argc, char *argv[])
 {
-	const char *ip_str;
-	const char *port_str;
 	struct common_buff *buff;
 	struct pollfd pfds[2];		/* stdin + sockfd */
+	const char *ip_str;
+	const char *port_str;
 	uint32_t timeout;
 	uint16_t blen;
 	int sockfd;

@@ -186,17 +186,17 @@ static int server_select_client(struct client_connect_info *client_info)
 
 int main(int argc, char *argv[])
 {
-	const char *port_str;
 	struct common_buff *buff;
-	uint16_t blen;
 	struct pollfd pfds[MAX_CLIENTS + 2];
-	uint16_t pfds_cnt;
-	uint32_t timeout;
-	int sockfd, connfd, maxfd;
-	int i, connect_cnt, check_cnt, close_cnt, ret;
 	struct client_connect_info client_info[MAX_CLIENTS];
 	struct sockaddr_in clientaddr;
 	socklen_t client_len;
+	const char *port_str;
+	uint32_t timeout;
+	uint16_t blen;
+	uint16_t pfds_cnt;
+	int sockfd;
+	int i, connect_cnt, check_cnt, close_cnt, ret;
 
 	if (argc < 2) {
 		SERVER_PRINT("usage: ./server port");
@@ -245,9 +245,6 @@ int main(int argc, char *argv[])
 
 				SERVER_PRINT("Client %d: %s:%d", i, inet_ntoa(client_info[i].clientaddr.sin_addr),
 							 client_info[i].clientaddr.sin_port);
-				if (client_info[i].fd > maxfd) {
-					maxfd = client_info[i].fd;
-				}
 				check_cnt++;
 			}
 		}
@@ -277,7 +274,7 @@ int main(int argc, char *argv[])
 			}
 
 			if (pfds[1].revents & POLLRDNORM) {
-				connfd = accept(sockfd, (struct sockaddr *)&clientaddr, &client_len);
+				int connfd = accept(sockfd, (struct sockaddr *)&clientaddr, &client_len);
 				if (connfd < 0) {
 					SERVER_PRINT("accept failed, %s", strerror(errno));
 					ret = -SERVER_ERRNO;

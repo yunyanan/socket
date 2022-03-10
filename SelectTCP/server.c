@@ -185,17 +185,16 @@ static int server_select_client(struct client_connect_info *client_info)
 
 int main(int argc, char *argv[])
 {
+	struct sockaddr_in clientaddr;
 	struct client_connect_info client_info[MAX_CLIENTS];
 	struct common_buff *buff;
 	struct timeval timeout;
+	socklen_t client_len;
 	const char *port_str;
 	uint16_t blen;
 	fd_set fds;
 	int sockfd, maxfd;
 	int i, connect_cnt, check_cnt, close_cnt, ret;
-
-	struct sockaddr_in clientaddr;
-	socklen_t client_len;
 
 	if (argc < 2) {
 		SERVER_PRINT("usage: ./server port");
