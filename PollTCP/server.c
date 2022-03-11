@@ -140,10 +140,12 @@ static int server_send_message(int clientfd, struct common_buff *sbuf, uint16_t 
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
 	slen = strlen((char *)sbuf->data);
-	if (slen > 0) {
-		sbuf->data[slen - 1] = '\0';
+	if (slen == 0) {
+		SERVER_PRINT("Input is empty");
+		return 0;
 	}
-	slen = strlen((char *)sbuf->data);
+	slen -= 1;
+	sbuf->data[slen] = '\0'; /* delete \n */
 
 	/* send to server */
 	ret = write(clientfd, sbuf, slen);
@@ -230,14 +232,13 @@ int main(int argc, char *argv[])
 	memset(pfds, 0x00, sizeof(struct pollfd)*(MAX_CLIENTS+2));
 	pfds[0].fd = fileno(stdin);	/* stdin can also be monitored using poll */
 	pfds[0].events = POLLIN;
-	pfds_cnt ++;
 
 	pfds[1].fd = sockfd;
 	pfds[1].events = POLLRDNORM;
-	pfds_cnt ++;
 
 	while (1) {
 		SERVER_PRINT("Select a client to send a message:");
+		pfds_cnt = 2;
 		for (i=0,check_cnt=0; (i<MAX_CLIENTS) && (check_cnt < connect_cnt); i++) {
 			if (client_info[i].fd > 0) {
 				pfds[i+2].fd = client_info[i].fd;
@@ -264,13 +265,13 @@ int main(int argc, char *argv[])
 				i = server_select_client(client_info);
 				if (i >= 0) {
 					if (server_send_message(client_info[i].fd, buff, blen) < 0) {
-						pfds[i+2].fd = -1;
-						pfds_cnt --;
-
 						close(client_info[i].fd);
 						client_info[i].fd = -1;
 						connect_cnt --;
 					}
+				}
+				if ((--ret) <= 0) {
+					continue;
 				}
 			}
 
@@ -301,21 +302,26 @@ int main(int argc, char *argv[])
 						}
 					}
 				}
+				if ((--ret) <= 0) {
+					continue;
+				}
 			}
 
 			for (i=0, check_cnt=0, close_cnt=0; (i<MAX_CLIENTS) && (check_cnt < connect_cnt); i++) {
 				if ((client_info[i].fd > 0) && (pfds[i+2].revents & POLLIN)) {
 					check_cnt++;
-					SERVER_PRINT("From client %s:%d.", inet_ntoa(client_info[i].clientaddr.sin_addr),
+					SERVER_PRINT("From client %d: %s:%d.", i, inet_ntoa(client_info[i].clientaddr.sin_addr),
 								 client_info[i].clientaddr.sin_port);
 					if (server_recv_message(client_info[i].fd, buff, blen) <= 0) {
 						close(client_info[i].fd);
 						client_info[i].fd = -1;
-						pfds[i+2].fd = -1;
-						pfds_cnt --;
 						close_cnt++;
-						SERVER_PRINT("connect %s:%d closed.", inet_ntoa(client_info[i].clientaddr.sin_addr),
+						SERVER_PRINT("connect %d: %s:%d closed.", i, inet_ntoa(client_info[i].clientaddr.sin_addr),
 									 client_info[i].clientaddr.sin_port);
+					}
+
+					if ((--ret) <= 0) {
+						break;
 					}
 				}
 			}

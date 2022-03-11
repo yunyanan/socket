@@ -262,7 +262,6 @@ int main(int argc, char *argv[])
 				i = server_select_client(client_info);
 				if (i >= 0) {
 					if (server_send_message(client_info[i].fd, buff, blen) < 0) {
-						FD_CLR(fileno(stdin), &fds);
 						close(client_info[i].fd);
 						client_info[i].fd = -1;
 						connect_cnt --;

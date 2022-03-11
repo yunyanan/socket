@@ -128,10 +128,12 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
 	slen = strlen((char *)sbuf->data);
-	if (slen > 0) {
-		sbuf->data[slen - 1] = '\0'; /* delete \n */
+	if (slen == 0) {
+		CLIENT_PRINT("Input is empty");
+		return 0;
 	}
-	slen = strlen((char *)sbuf->data);
+	slen -= 1;
+	sbuf->data[slen] = '\0'; /* delete \n */
 
 	/* send to server */
 	ret = write(sockfd, sbuf->data, slen);
