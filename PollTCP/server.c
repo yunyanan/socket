@@ -196,7 +196,6 @@ int main(int argc, char *argv[])
 	const char *port_str;
 	uint32_t timeout;
 	uint16_t blen;
-	uint16_t pfds_cnt;
 	int sockfd;
 	int i, connect_cnt, check_cnt, close_cnt, ret;
 
@@ -227,9 +226,11 @@ int main(int argc, char *argv[])
 	connect_cnt = 0;
 	memset(client_info, 0x00, sizeof(struct client_connect_info) * MAX_CLIENTS);
 
-	pfds_cnt = 0;
 	timeout = 10 * 1000;
-	memset(pfds, 0x00, sizeof(struct pollfd)*(MAX_CLIENTS+2));
+	for (i=0; i<MAX_CLIENTS+2; i++) {
+		pfds[i].fd = -1;
+	}
+
 	pfds[0].fd = fileno(stdin);	/* stdin can also be monitored using poll */
 	pfds[0].events = POLLIN;
 
@@ -238,13 +239,8 @@ int main(int argc, char *argv[])
 
 	while (1) {
 		SERVER_PRINT("Select a client to send a message:");
-		pfds_cnt = 2;
 		for (i=0,check_cnt=0; (i<MAX_CLIENTS) && (check_cnt < connect_cnt); i++) {
 			if (client_info[i].fd > 0) {
-				pfds[i+2].fd = client_info[i].fd;
-				pfds[i+2].events = POLLIN;
-				pfds_cnt ++;
-
 				SERVER_PRINT("Client %d: %s:%d", i, inet_ntoa(client_info[i].clientaddr.sin_addr),
 							 client_info[i].clientaddr.sin_port);
 				check_cnt++;
@@ -252,7 +248,7 @@ int main(int argc, char *argv[])
 		}
 		SERVER_PRINT("---------------------------------\n");
 
-		ret = poll(pfds, pfds_cnt, timeout);
+		ret = poll(pfds, MAX_CLIENTS+2, timeout);
 		if (ret < 0) {
 			SERVER_PRINT("poll failed, %s", strerror(errno));
 			ret = -SERVER_ERRNO;
@@ -267,6 +263,7 @@ int main(int argc, char *argv[])
 					if (server_send_message(client_info[i].fd, buff, blen) < 0) {
 						close(client_info[i].fd);
 						client_info[i].fd = -1;
+						pfds[i+2].fd = -1;
 						connect_cnt --;
 					}
 				}
@@ -295,6 +292,9 @@ int main(int argc, char *argv[])
 							/* set non-blocking mode */
 							fcntl(connfd, F_SETFL, flags|O_NONBLOCK);
 
+							pfds[i+2].fd = connfd;
+							pfds[i+2].events = POLLIN;
+
 							client_info[i].fd = connfd;
 							client_info[i].clientaddr = clientaddr;
 							connect_cnt ++;
@@ -315,6 +315,7 @@ int main(int argc, char *argv[])
 					if (server_recv_message(client_info[i].fd, buff, blen) <= 0) {
 						close(client_info[i].fd);
 						client_info[i].fd = -1;
+						pfds[i+2].fd = -1;
 						close_cnt++;
 						SERVER_PRINT("connect %d: %s:%d closed.", i, inet_ntoa(client_info[i].clientaddr.sin_addr),
 									 client_info[i].clientaddr.sin_port);
