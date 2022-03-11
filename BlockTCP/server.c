@@ -147,10 +147,14 @@ static int server_send_message(int connfd, struct common_buff *sbuf)
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, sbuf->len, stdin);
 	sbuf->len = strlen((char *)sbuf->data);
-	if (sbuf->len > 0) {
-		sbuf->data[sbuf->len - 1] = '\0';
+	if (sbuf->len == 0) {
+		SERVER_PRINT("Input is empty");
+		return 0;
 	}
-	sbuf->len = strlen((char *)sbuf->data);
+
+	sbuf->len -= 1;
+	sbuf->data[sbuf->len] = '\0'; /* delete \n */
+
 	slen = sizeof(struct common_buff) + sbuf->len;
 
 	sbuf->len = htonl(sbuf->len);

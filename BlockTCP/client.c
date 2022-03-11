@@ -28,6 +28,7 @@ static int client_connect_server(const char *ip_str, const char *port_str)
 	uint16_t port;
 	int sockfd;
 	int ret;
+	int on;
 
 	/* Creating a socket descriptor  */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -36,6 +37,9 @@ static int client_connect_server(const char *ip_str, const char *port_str)
 		return -CLIENT_ERRNO;
 	}
 	CLIENT_PRINT("create ok");
+
+	on = 1;
+	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int));
 
 	port = atoi(port_str);
 	bzero(&servaddr, sizeof(struct sockaddr_in));
@@ -84,10 +88,14 @@ static int client_send_message(int sockfd, struct common_buff *sbuf)
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, sbuf->len, stdin);
 	sbuf->len = strlen((char *)sbuf->data);
-	if (sbuf->len > 0) {
-		sbuf->data[sbuf->len - 1] = '\0'; /* delete \n */
+	if (sbuf->len == 0) {
+		CLIENT_PRINT("Input is empty");
+		return 0;
 	}
-	sbuf->len = strlen((char *)sbuf->data);
+
+	sbuf->len -= 1;
+	sbuf->data[sbuf->len] = '\0'; /* delete \n */
+
 	slen = sizeof(struct common_buff) + sbuf->len;
 
 	sbuf->len = htonl(sbuf->len);
