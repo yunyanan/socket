@@ -1,4 +1,17 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/epoll.h>
+
+#include "common.h"
 
 #define CLIENT_ERRNO				__LINE__
 #define CLIENT_PRINT(_fmt, ...)		printf("[%04d] "_fmt"\n", __LINE__, ##__VA_ARGS__);
@@ -8,37 +21,35 @@
  *
  * @param[in] sockfd	file descriptor
  * @param[in] sbuf		send buff pointer
+ * @param[in] servaddr	server addr info
  *
  * @return On success, return the length of the sent.
  */
-static int client_send_message(int sockfd, struct common_buff *sbuf, struct sockaddr_in *servaddr)
+static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t buff_len,
+							   struct sockaddr_in *servaddr)
 {
-	socklen_t servlen;
 	uint32_t slen;
 	int ret;
 
 	/* clear send buff */
-	memset(sbuf->data, 0x00, sbuf->len);
+	memset(sbuf->data, 0x00, buff_len);
 
 	/* get input from stdin  */
-	fgets((char *)sbuf->data, sbuf->len, stdin);
-	sbuf->len = strlen((char *)sbuf->data);
-	if (sbuf->len > 0) {
-		sbuf->data[sbuf->len - 1] = '\0'; /* delete \n */
+	fgets((char *)sbuf->data, buff_len, stdin);
+	slen = strlen((char *)sbuf->data);
+	if (slen > 0) {
+		sbuf->data[slen - 1] = '\0'; /* delete \n */
 	}
-	sbuf->len = strlen((char *)sbuf->data);
-	slen = sizeof(struct common_buff) + sbuf->len;
+	slen = strlen((char *)sbuf->data);
 
-	sbuf->len = htonl(sbuf->len);
-	servlen = sizeof(struct sockaddr_in);
 	/* send to server */
-	ret = sendto(sockfd, sbuf, slen, 0, servaddr, servlen);
+	ret = sendto(sockfd, sbuf, slen, 0, (const struct sockaddr *)servaddr, sizeof(struct sockaddr_in));
 	if (ret < 0) {
 		/* we failed */
 		CLIENT_PRINT("write failed, %s", strerror(errno));
 		return -CLIENT_ERRNO;
 	}
-	CLIENT_PRINT("TX[%04d]> %s", ret, sbuf->data); /* The data sent contains 'sbuf->len', so 'ret = strlen(sbuf->data) + sizeof(sbuf->len)' */
+	CLIENT_PRINT("TX[%04d]> %s", ret, sbuf->data);
 	/* CLIENT_PRINT("send %d bytes data", ret); */
 
 	return ret;
@@ -49,45 +60,34 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, struct sock
  *
  * @param[in] sockfd	socket file descriptor
  * @param[in] sbuf		send buff pointer
+ * @param[in] servaddr	server addr info
  *
  * @return On success, return the length of the sent.
  */
-static int client_recv_message(int sockfd, struct common_buff *sbuf)
+static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t buff_len,
+							   struct sockaddr_in *servaddr)
 {
-	void *rptr;
+	socklen_t len;
+	char *ptr;
 	uint32_t rlen;
-	int count = 2;
 	int ret;
 
-	rptr = &sbuf->len;
-	rlen = sizeof(sbuf->len);
-
-	/* ret = recvfrom(sockfd, rlen, MAXLINE, 0, reply_addr, &len); */
+	ptr = (char *)sbuf;
+	rlen = 0;
 	do {
-		ret = read(sockfd, rptr, rlen);
+		ret = recvfrom(sockfd, &ptr[rlen], buff_len - rlen, 0, (struct sockaddr *)servaddr, &len);
 		if (ret < 0) {
-			CLIENT_PRINT("read failed, %s", strerror(errno));
-			return -CLIENT_ERRNO;
+			if (errno != EAGAIN) {
+				CLIENT_PRINT("read failed, %s", strerror(errno));
+				return -CLIENT_ERRNO;
+			}
+			break;
 		} else if (ret == 0) {
 			CLIENT_PRINT("server closed connection");
 			return 0;
 		}
-
-		if (count == 2) {
-			sbuf->len = ntohl(sbuf->len);
-			if (sbuf->len == 0) {
-				/* data illegal */
-				CLIENT_PRINT("no data read from the server");
-				break;
-			} else if (sbuf->len > DATA_MAX_LEN) {
-				CLIENT_PRINT("data error!!!");
-				return -CLIENT_ERRNO;
-			}
-		}
-
-		rptr = &sbuf->data;
-		rlen = sbuf->len;
-	} while ((--count) > 0);
+		rlen += ret;
+	} while ((ret > 0) && (rlen < buff_len));
 
 	CLIENT_PRINT("RX[%04d]> %s", rlen, sbuf->data);
 
@@ -96,15 +96,18 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf)
 
 int main(int argc, char *argv[])
 {
-	struct sockaddr_in servaddr;
-	struct sockaddr reply_addr;
-    socklen_t servlen;
 	struct common_buff *buff;
+	struct epoll_event epev;
+	struct epoll_event events[2];
+	struct sockaddr_in servaddr;
 	const char *ip_str;
 	const char *port_str;
+	uint32_t timeout;
 	uint16_t port;
 	uint16_t blen;
-	int sockfd;
+	int sockfd, epfd;
+	int flags;
+	int i, ret;
 
 	if (argc < 3) {
 		CLIENT_PRINT("usage: ./client ip port");
@@ -118,11 +121,12 @@ int main(int argc, char *argv[])
 		return -CLIENT_ERRNO;
 	}
 
+	sockfd = epfd = -1;
+
 	ip_str   = argv[1];
 	port_str = argv[2];
 	CLIENT_PRINT("addr: %s:%s", ip_str, port_str);
 
-	servlen = sizeof(struct sockaddr_in);
 	port = atoi(port_str);
 	bzero(&servaddr, sizeof(struct sockaddr_in));
 	servaddr.sin_family = AF_INET;
@@ -133,24 +137,68 @@ int main(int argc, char *argv[])
 		goto label_main_exit;
 	}
 
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd < 0) {
 		CLIENT_PRINT("Create socket failed, %s", strerror(errno));
 		ret = -CLIENT_ERRNO;
 		goto label_main_exit;
 	}
 
-	while (1) {
-		buff->len = DATA_MAX_LEN;
-		if (client_send_message(sockfd, buff, &servaddr) < 0) {
-			break;
-		}
+	/* set non-blocking mode */
+	flags = fcntl(sockfd, F_GETFL, 0);
+	fcntl(sockfd, F_SETFL, flags|O_NONBLOCK);
 
-		if (client_recv_message(sockfd, buff) <= 0) {
+	epfd = epoll_create(2);
+	if (epfd < 0) {
+		CLIENT_PRINT("epoll failed, %s", strerror(errno));
+		goto label_main_exit;
+	}
+
+	timeout = 10*1000;
+	memset(&epev, 0x00, sizeof(struct epoll_event));
+	epev.events = EPOLLIN;
+	epev.data.fd = fileno(stdin);	/* stdin can also be monitored using epoll */
+	epoll_ctl(epfd, EPOLL_CTL_ADD, fileno(stdin), &epev);
+
+	epev.events = EPOLLIN;
+	epev.data.fd = sockfd;
+	epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &epev);
+
+	memset(events, 0x00, sizeof(struct epoll_event) * 2);
+	while (1) {
+		ret = epoll_wait(epfd, events, 2, timeout);
+		if (ret < 0) {
+			CLIENT_PRINT("epoll failed, %s", strerror(errno));
+			ret = -CLIENT_ERRNO;
 			break;
+		} else if (ret == 0) {
+			CLIENT_PRINT("epoll timeout...");
+			continue;
+		} else {
+			for (i=0; i<ret; i++) {
+				if (events[i].events & EPOLLIN) {
+					if (events[i].data.fd == fileno(stdin)) {
+						if (client_send_message(sockfd, buff, blen, &servaddr) < 0) {
+							goto label_main_exit;
+						}
+
+						if (strcmp((const char *)buff->data, "quit") == 0) {
+							CLIENT_PRINT("ready to quit...");
+							epoll_ctl(epfd, EPOLL_CTL_DEL, fileno(stdin), NULL);
+							close(sockfd);
+							goto label_main_exit;
+						}
+					} else if (events[i].data.fd == sockfd) {
+						if (client_recv_message(sockfd, buff, blen, &servaddr) <= 0) {
+							goto label_main_exit;
+						}
+					}
+				}
+			}
 		}
 	}
 
+label_main_exit:
 	if (buff) {
 		free(buff);
 		buff = NULL;
@@ -158,6 +206,10 @@ int main(int argc, char *argv[])
 	if (sockfd > 0) {
 		close(sockfd);
 		sockfd = -1;
+	}
+	if (epfd > 0) {
+		close(epfd);
+		epfd = -1;
 	}
 
 	CLIENT_PRINT("client exit...");
