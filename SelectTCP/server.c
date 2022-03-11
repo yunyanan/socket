@@ -139,10 +139,12 @@ static int server_send_message(int clientfd, struct common_buff *sbuf, uint16_t 
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
 	slen = strlen((char *)sbuf->data);
-	if (slen > 0) {
-		sbuf->data[slen - 1] = '\0';
+	if (slen == 0) {
+		SERVER_PRINT("Input is empty");
+		return 0;
 	}
-	slen = strlen((char *)sbuf->data);
+	slen -= 1;
+	sbuf->data[slen] = '\0'; /* delete \n */
 
 	/* send to server */
 	ret = write(clientfd, sbuf, slen);
@@ -189,7 +191,6 @@ int main(int argc, char *argv[])
 	struct client_connect_info client_info[MAX_CLIENTS];
 	struct common_buff *buff;
 	struct timeval timeout;
-	socklen_t client_len;
 	const char *port_str;
 	uint16_t blen;
 	fd_set fds;
@@ -217,8 +218,6 @@ int main(int argc, char *argv[])
 		free(buff);
 		return -SERVER_ERRNO;
 	}
-
-	client_len = sizeof(struct sockaddr_in);
 
 	connect_cnt = 0;
 	memset(client_info, 0x00, sizeof(struct client_connect_info) * MAX_CLIENTS);
@@ -272,6 +271,7 @@ int main(int argc, char *argv[])
 			}
 
 			if (FD_ISSET(sockfd, &fds)) {
+				socklen_t client_len = sizeof(struct sockaddr_in);
 				int connfd = accept(sockfd, (struct sockaddr *)&clientaddr, &client_len);
 				if (connfd < 0) {
 					SERVER_PRINT("accept failed, %s", strerror(errno));
@@ -283,7 +283,6 @@ int main(int argc, char *argv[])
 					SERVER_PRINT("too many connections");
 					close(connfd);
 					connfd = -1;
-					FD_CLR(connfd, &fds);
 				} else {
 					SERVER_PRINT("accpet a new client: %s:%d", inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port);
 					for (i=0; i<MAX_CLIENTS; i++) {
