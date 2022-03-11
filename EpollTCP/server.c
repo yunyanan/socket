@@ -42,7 +42,7 @@ static int server_listen_connection(const char *port_str)
 	int on = 1;
 
 	/* Creating a socket descriptor  */
-	sockfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) {
 		SERVER_PRINT("create socket failed, %s", strerror(errno));
 		return -SERVER_ERRNO;
