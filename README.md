@@ -5,7 +5,7 @@
   + [X] Poll TCP
   + [X] Epoll TCP
   + [X] UDP
-  + [ ] Local
+  + [X] Local
 
 ## Build
 
