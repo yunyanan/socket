@@ -1,10 +1,11 @@
 
 ## To-Do List
-  + [ ] Block TCP
-  + [ ] Select TCP
-  + [ ] Poll TCP
-  + [ ] Epoll TCP
-  + [ ] UDP
+  + [X] Block TCP
+  + [X] Select TCP
+  + [X] Poll TCP
+  + [X] Epoll TCP
+  + [X] UDP
+  + [ ] Local
 
 ## Build
 
