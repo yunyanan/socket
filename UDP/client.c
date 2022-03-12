@@ -21,6 +21,7 @@
  *
  * @param[in] sockfd	file descriptor
  * @param[in] sbuf		send buff pointer
+ * @param[in] buff_len	send buff size
  * @param[in] servaddr	server addr info
  *
  * @return On success, return the length of the sent.
@@ -37,10 +38,12 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
 	slen = strlen((char *)sbuf->data);
-	if (slen > 0) {
-		sbuf->data[slen - 1] = '\0'; /* delete \n */
+	if (slen == 0) {
+		CLIENT_PRINT("Input is empty");
+		return 0;
 	}
-	slen = strlen((char *)sbuf->data);
+	slen -= 1;
+	sbuf->data[slen] = '\0'; /* delete \n */
 
 	/* send to server */
 	ret = sendto(sockfd, sbuf, slen, 0, (const struct sockaddr *)servaddr, sizeof(struct sockaddr_in));
@@ -59,12 +62,13 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
  * Receive a message from the server
  *
  * @param[in] sockfd	socket file descriptor
- * @param[in] sbuf		send buff pointer
+ * @param[in] rbuf		recv buff pointer
+ * @param[in] buff_len	recv buff size
  * @param[in] servaddr	server addr info
  *
  * @return On success, return the length of the sent.
  */
-static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t buff_len,
+static int client_recv_message(int sockfd, struct common_buff *rbuf, uint16_t buff_len,
 							   struct sockaddr_in *servaddr)
 {
 	socklen_t len;
@@ -72,7 +76,7 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 	uint32_t rlen;
 	int ret;
 
-	ptr = (char *)sbuf;
+	ptr = (char *)rbuf;
 	rlen = 0;
 	do {
 		ret = recvfrom(sockfd, &ptr[rlen], buff_len - rlen, 0, (struct sockaddr *)servaddr, &len);
@@ -89,7 +93,7 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 		rlen += ret;
 	} while ((ret > 0) && (rlen < buff_len));
 
-	CLIENT_PRINT("RX[%04d]> %s", rlen, sbuf->data);
+	CLIENT_PRINT("RX[%04d]> %s", rlen, rbuf->data);
 
 	return rlen;
 }
@@ -172,7 +176,7 @@ int main(int argc, char *argv[])
 			ret = -CLIENT_ERRNO;
 			break;
 		} else if (ret == 0) {
-			CLIENT_PRINT("epoll timeout...");
+			/* CLIENT_PRINT("epoll timeout..."); */
 			continue;
 		} else {
 			for (i=0; i<ret; i++) {

@@ -83,19 +83,19 @@ label_server_accept_client:
  * Receive a message from the client
  *
  * @param[in] confd		client connection file descriptor
- * @param[in] sbuf		send buff pointer
+ * @param[in] rbuf		recv buff pointer
  *
  * @return On success, return the length of the sent.
  */
-static int server_recv_message(int connfd, struct common_buff *sbuf)
+static int server_recv_message(int connfd, struct common_buff *rbuf)
 {
 	void *rptr;
 	uint32_t rlen;
 	int count = 2;
 	int ret;
 
-	rptr = &sbuf->len;
-	rlen = sizeof(sbuf->len);
+	rptr = &rbuf->len;
+	rlen = sizeof(rbuf->len);
 	do {
 		ret = read(connfd, rptr, rlen);
 		if (ret < 0) {
@@ -107,22 +107,22 @@ static int server_recv_message(int connfd, struct common_buff *sbuf)
 		}
 
 		if (count == 2) {
-			sbuf->len = ntohl(sbuf->len);
-			if (sbuf->len == 0) {
+			rbuf->len = ntohl(rbuf->len);
+			if (rbuf->len == 0) {
 				/* data illegal */
 				SERVER_PRINT("no data read from the client");
 				break;
-			} else if (sbuf->len > DATA_MAX_LEN) {
+			} else if (rbuf->len > DATA_MAX_LEN) {
 				SERVER_PRINT("data error!!!");
 				return -SERVER_ERRNO;
 			}
 		}
 
-		rptr = &sbuf->data;
-		rlen = sbuf->len;
+		rptr = &rbuf->data;
+		rlen = rbuf->len;
 	} while ((--count) > 0);
 
-	SERVER_PRINT("RX[%04d]> %s", rlen, sbuf->data);
+	SERVER_PRINT("RX[%04d]> %s", rlen, rbuf->data);
 
 	return rlen;
 

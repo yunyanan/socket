@@ -152,18 +152,18 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
  * Receive a message from the server
  *
  * @param[in] sockfd	socket file descriptor
- * @param[in] sbuf		recv buff pointer
+ * @param[in] rbuf		recv buff pointer
  * @param[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */
-static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t buff_len)
+static int client_recv_message(int sockfd, struct common_buff *rbuf, uint16_t buff_len)
 {
 	char *ptr;
 	uint32_t rlen;
 	int ret;
 
-	ptr = (char *)sbuf;
+	ptr = (char *)rbuf;
 	rlen = 0;
 	do {
 		ret = read(sockfd, &ptr[rlen], buff_len - rlen);
@@ -180,7 +180,7 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 		rlen += ret;
 	} while ((ret > 0) && (rlen < buff_len));
 
-	CLIENT_PRINT("RX[%04d]> %s", rlen, sbuf->data);
+	CLIENT_PRINT("RX[%04d]> %s", rlen, rbuf->data);
 
 	return rlen;
 }

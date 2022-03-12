@@ -37,6 +37,7 @@ static int client_connect_server(const char *ip_str, const char *port_str)
 	int ret;
 	int recon_cnt;
 
+	sockfd = epfd = -1;
 	/* Creating a socket descriptor  */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) {
@@ -149,10 +150,12 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
 	slen = strlen((char *)sbuf->data);
-	if (slen > 0) {
-		sbuf->data[slen - 1] = '\0'; /* delete \n */
+	if (slen == 0) {
+		CLIENT_PRINT("Input is empty");
+		return 0;
 	}
-	slen = strlen((char *)sbuf->data);
+	slen -= 1;
+	sbuf->data[slen] = '\0'; /* delete \n */
 
 	/* send to server */
 	ret = write(sockfd, sbuf->data, slen);
@@ -171,18 +174,18 @@ static int client_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
  * Receive a message from the server
  *
  * @param[in] sockfd	socket file descriptor
- * @param[in] sbuf		recv buff pointer
+ * @param[in] rbuf		recv buff pointer
  * @param[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */
-static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t buff_len)
+static int client_recv_message(int sockfd, struct common_buff *rbuf, uint16_t buff_len)
 {
 	char *ptr;
 	uint32_t rlen;
 	int ret;
 
-	ptr = (char *)sbuf;
+	ptr = (char *)rbuf;
 	rlen = 0;
 	do {
 		ret = read(sockfd, &ptr[rlen], buff_len - rlen);
@@ -199,7 +202,7 @@ static int client_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 		rlen += ret;
 	} while ((ret > 0) && (rlen < buff_len));
 
-	CLIENT_PRINT("RX[%04d]> %s", rlen, sbuf->data);
+	CLIENT_PRINT("RX[%04d]> %s", rlen, rbuf->data);
 
 	return rlen;
 }

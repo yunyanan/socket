@@ -88,18 +88,18 @@ label_server_listen_connection:
  * Receive a message from the client
  *
  * @param[in] clientfd	client connection file descriptor
- * @param[in] sbuf		recv buff pointer
+ * @param[in] rbuf		recv buff pointer
  * @param[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */
-static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t buff_len)
+static int server_recv_message(int clientfd, struct common_buff *rbuf, uint16_t buff_len)
 {
 	char *rptr;
 	uint32_t rlen;
 	int ret;
 
-	rptr = (char *)sbuf;
+	rptr = (char *)rbuf;
 	rlen = 0;
 	do {
 		ret = read(clientfd, &rptr[rlen], buff_len - rlen);
@@ -116,7 +116,7 @@ static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t 
 		rlen += ret;
 	} while (ret > 0);
 
-	SERVER_PRINT("RX[%04d]> %s", rlen, sbuf->data);
+	SERVER_PRINT("RX[%04d]> %s", rlen, rbuf->data);
 
 	return rlen;
 }
@@ -141,10 +141,12 @@ static int server_send_message(int clientfd, struct common_buff *sbuf, uint16_t 
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
 	slen = strlen((char *)sbuf->data);
-	if (slen > 0) {
-		sbuf->data[slen - 1] = '\0';
+	if (slen == 0) {
+		SERVER_PRINT("Input is empty");
+		return 0;
 	}
-	slen = strlen((char *)sbuf->data);
+	slen -= 1;
+	sbuf->data[slen] = '\0'; /* delete \n */
 
 	/* send to server */
 	ret = write(clientfd, sbuf, slen);
@@ -312,8 +314,10 @@ int main(int argc, char *argv[])
 								SERVER_PRINT("From client %s:%d.", inet_ntoa(client_info[t].clientaddr.sin_addr),
 											 client_info[t].clientaddr.sin_port);
 								if (server_recv_message(events[i].data.fd, buff, blen) <= 0) {
+									epoll_ctl(epfd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
 									close(events[i].data.fd);
 									client_info[t].fd = -1;
+									connect_cnt --;
 									SERVER_PRINT("connect %s:%d closed.", inet_ntoa(client_info[t].clientaddr.sin_addr),
 												 client_info[t].clientaddr.sin_port);
 								}

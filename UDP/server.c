@@ -20,13 +20,13 @@
  * Receive a message from the client
  *
  * @param[in] sockfd	client connection file descriptor
- * @param[in] sbuf		recv buff pointer
+ * @param[in] rbuf		recv buff pointer
  * @param[in] buff_len	recv buff size
  * @param[in] cliaddr	client addr info
  *
  * @return On success, return the length of the sent.
  */
-static int server_recv_message(int sockfd, struct common_buff *sbuf, uint16_t buff_len,
+static int server_recv_message(int sockfd, struct common_buff *rbuf, uint16_t buff_len,
 							   struct sockaddr_in *cliaddr)
 {
 	socklen_t len;
@@ -34,7 +34,7 @@ static int server_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 	uint32_t rlen;
 	int ret;
 
-	rptr = (char *)sbuf;
+	rptr = (char *)rbuf;
 	rlen = 0;
 
 	len = sizeof(struct sockaddr_in);
@@ -53,7 +53,7 @@ static int server_recv_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 		rlen += ret;
 	} while (ret > 0);
 
-	SERVER_PRINT("RX[%04d]> %s", rlen, sbuf->data);
+	SERVER_PRINT("RX[%04d]> %s", rlen, rbuf->data);
 
 	return rlen;
 }
@@ -80,10 +80,12 @@ static int server_send_message(int sockfd, struct common_buff *sbuf, uint16_t bu
 	/* get input from stdin  */
 	fgets((char *)sbuf->data, buff_len, stdin);
 	slen = strlen((char *)sbuf->data);
-	if (slen > 0) {
-		sbuf->data[slen - 1] = '\0';
+	if (slen == 0) {
+		SERVER_PRINT("Input is empty");
+		return 0;
 	}
-	slen = strlen((char *)sbuf->data);
+	slen -= 1;
+	sbuf->data[slen] = '\0'; /* delete \n */
 
 	/* send to server */
 	ret = sendto(sockfd, sbuf, slen, 0, (const struct sockaddr *)cliaddr, sizeof(struct sockaddr_in));
@@ -181,7 +183,7 @@ int main(int argc, char *argv[])
 			ret = -SERVER_ERRNO;
 			break;
 		} else if (ret == 0) {
-			SERVER_PRINT("epoll timeout...");
+			/* SERVER_PRINT("epoll timeout..."); */
 			continue;
 		} else {
 			for (i=0; i<ret; i++) {
@@ -196,9 +198,7 @@ int main(int argc, char *argv[])
 							goto label_main_exit;
 						}
 						SERVER_PRINT("receive from client: %s:%d", inet_ntoa(cliaddr.sin_addr), cliaddr.sin_port);
-
 					}
-
 				}
 			}
 		}

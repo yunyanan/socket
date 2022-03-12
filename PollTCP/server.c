@@ -87,18 +87,18 @@ label_server_listen_connection:
  * Receive a message from the client
  *
  * @param[in] clientfd	client connection file descriptor
- * @param[in] sbuf		recv buff pointer
+ * @param[in] rbuf		recv buff pointer
  * @param[in] buff_len	recv buff size
  *
  * @return On success, return the length of the sent.
  */
-static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t buff_len)
+static int server_recv_message(int clientfd, struct common_buff *rbuf, uint16_t buff_len)
 {
 	char *rptr;
 	uint32_t rlen;
 	int ret;
 
-	rptr = (char *)sbuf;
+	rptr = (char *)rbuf;
 	rlen = 0;
 	do {
 		ret = read(clientfd, &rptr[rlen], buff_len - rlen);
@@ -115,7 +115,7 @@ static int server_recv_message(int clientfd, struct common_buff *sbuf, uint16_t 
 		rlen += ret;
 	} while (ret > 0);
 
-	SERVER_PRINT("RX[%04d]> %s", rlen, sbuf->data);
+	SERVER_PRINT("RX[%04d]> %s", rlen, rbuf->data);
 
 	return rlen;
 }
