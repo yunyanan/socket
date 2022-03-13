@@ -30,6 +30,7 @@ static int server_accept_client(const char *port_str)
 	uint16_t port;
 	int sockfd, connfd;
 	int ret;
+	int on;
 
 	/* Creating a socket descriptor  */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -44,6 +45,9 @@ static int server_accept_client(const char *port_str)
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(port);
+
+	on = 1;
+	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int));
 
 	ret = bind(sockfd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in));
 	if (ret < 0) {
