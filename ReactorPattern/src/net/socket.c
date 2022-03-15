@@ -2,6 +2,10 @@
 
 struct socketops_data {
 	int sockfd;
+	int port;
+
+	int domain;
+	int type;
 };
 
 static void socket_set_nonblock(int sockfd)
@@ -22,8 +26,9 @@ static void socket_set_cloexec(int sockfd)
 	fcntl(sockfd, F_SETFL, flags|FD_CLOEXEC);
 }
 
-static int socket_nonblock_create(int domain, int type)
+static int socket_nonblock_create(struct acceptor *acceptor, int domain, int type)
 {
+	struct socketops_data *data = acceptor->data;
 	int sockfd = socket(domain, type, 0);
 	if (sockfd < 0) {
 		LOGERR("create socket failed, %s", strerror(errno));
@@ -33,14 +38,55 @@ static int socket_nonblock_create(int domain, int type)
 	socket_set_nonblock(sockfd);
 	socket_set_cloexec(sockfd);
 
+	data->sockfd = sockfd;
+	data->domain = domain;
+	data->type	 = type;
+
 	LOGRUN("create sockte %d ok", sockfd);
 	return sockfd;
 }
 
-static void socket_set_reuseaddr(int on)
+static void socket_set_reuseaddr(struct acceptor *acceptor, int on)
 {
+	struct socketops_data *data = acceptor->data;
 	int optval = (on != 0) ? 1 : 0;
-	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int));
+	setsockopt(data->sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int));
+}
+
+static void socket_set_reuseport(struct acceptor *acceptor, int on)
+{
+	struct socketops_data *data = acceptor->data;
+	int optval = (on != 0) ? 1 : 0;
+	setsockopt(data->sockfd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(int));
+}
+
+static int socket_bind_addr(struct acceptor *acceptor, int port)
+{
+	struct socketops_data *data = acceptor->data;
+    struct sockaddr_in servaddr;
+	int ret;
+
+	bzero(&servaddr, sizeof(struct sockaddr_in));
+    servaddr.sin_family = data->domain;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(port);
+
+	data->port = port;
+	ret = bind(data->sockfd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in));
+	if (ret < 0) {
+		LOGERR("bind fd %d failed, %s", data->sockfd, strerror(errno));
+	}
+	return ret;
+}
+
+static int socket_listen(struct acceptor *acceptor)
+{
+	struct socketops_data *data = acceptor->data;
+	int ret = listen(data->sockfd, SOMAXCONN);
+	if (ret < 0) {
+		LOGERR("listen fd %d failed, %s", data->sockfd, strerror(errno));
+	}
+	return ret;
 }
 
 struct socketops *socketops_init(void)
@@ -61,6 +107,11 @@ struct socketops *socketops_init(void)
 	}
 
 	ops->create_nonblocking = &socket_nonblocking_create;
+	ops->set_reuseaddr = &socket_set_reuseaddr;
+	ops->set_reuseport = &socket_set_reuseport;
+	ops->bind_addr	   = &socket_bind_addr;
+	ops->listen		   = &socket_listen;
+
 	ops->data = data;
 
 	return ops;

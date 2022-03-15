@@ -19,10 +19,21 @@ struct accetpor *acceptor_init(int port)
 		goto label_acceptor_init;
 	}
 
-	sockfd = socketops->create_nonblocking(AF_INET, SOCK_STREAM);
+	sockfd = socketops->create_nonblocking(socketops, AF_INET, SOCK_STREAM);
 	if (sockfd < 0) {
 		LOGERR("acceptor create socket failed");
-		free(acceptor);
+		goto label_acceptor_init;
+	}
+
+	socketops->set_reuseaddr(socketops, 1);
+	socketops->set_reuseport(socketops, 1);
+	if (socketops->bind_addr(socketops, port) < 0) {
+		LOGERR("acceptor bind socket failed");
+		goto label_acceptor_init;
+	}
+
+	if (socketops->listen(socketops) < 0) {
+		LOGERR("acceptor listen socket failed");
 		goto label_acceptor_init;
 	}
 
