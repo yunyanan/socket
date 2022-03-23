@@ -26,9 +26,9 @@ static void socket_set_cloexec(int sockfd)
 	fcntl(sockfd, F_SETFL, flags|FD_CLOEXEC);
 }
 
-static int socket_nonblock_create(struct acceptor *acceptor, int domain, int type)
+static int socket_nonblock_create(struct socketops *ops, int domain, int type)
 {
-	struct socketops_data *data = acceptor->data;
+	struct socketops_data *data = ops->data;
 	int sockfd = socket(domain, type, 0);
 	if (sockfd < 0) {
 		LOGERR("create socket failed, %s", strerror(errno));
@@ -46,23 +46,23 @@ static int socket_nonblock_create(struct acceptor *acceptor, int domain, int typ
 	return sockfd;
 }
 
-static void socket_set_reuseaddr(struct acceptor *acceptor, int on)
+static void socket_set_reuseaddr(struct socketops *ops, int on)
 {
-	struct socketops_data *data = acceptor->data;
+	struct socketops_data *data = ops->data;
 	int optval = (on != 0) ? 1 : 0;
 	setsockopt(data->sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int));
 }
 
-static void socket_set_reuseport(struct acceptor *acceptor, int on)
+static void socket_set_reuseport(struct socketops *ops, int on)
 {
-	struct socketops_data *data = acceptor->data;
+	struct socketops_data *data = ops->data;
 	int optval = (on != 0) ? 1 : 0;
 	setsockopt(data->sockfd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(int));
 }
 
-static int socket_bind_addr(struct acceptor *acceptor, int port)
+static int socket_bind_addr(struct socketops *ops, int port)
 {
-	struct socketops_data *data = acceptor->data;
+	struct socketops_data *data = ops->data;
     struct sockaddr_in servaddr;
 	int ret;
 
@@ -79,9 +79,9 @@ static int socket_bind_addr(struct acceptor *acceptor, int port)
 	return ret;
 }
 
-static int socket_listen(struct acceptor *acceptor)
+static int socket_listen(struct socketops *ops)
 {
-	struct socketops_data *data = acceptor->data;
+	struct socketops_data *data = ops->data;
 	int ret = listen(data->sockfd, SOMAXCONN);
 	if (ret < 0) {
 		LOGERR("listen fd %d failed, %s", data->sockfd, strerror(errno));
@@ -127,6 +127,9 @@ label_socketops_init:
 void socketops_free(struct socketops *ops)
 {
 	if (ops) {
+		struct socketops_data *data = ops->data;
+		close(data->sockfd);
+		free(data);
 		free(ops);
 	}
 }

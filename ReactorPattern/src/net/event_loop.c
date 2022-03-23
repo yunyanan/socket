@@ -17,6 +17,7 @@ struct event_loop *event_loop_init(const char *name)
 	eloop->name = name;
 	eloop->quit = 0;
 	eloop->pid	= pthread_self();
+	eloop->dispatcher = &event_dispatcher;
 
 	LOGRUN("event loop init ok");
 
@@ -30,9 +31,13 @@ int event_loop_run(struct event_loop *eloop)
 		return -EVENT_ERRNO;
 	}
 
+	struct event_dispatcher *dispatcher = eloop->dispatcher;
 	LOGDBG("%s event loop run", eloop->name);
 
+
 	while (!eloop->quit) {
+		dispatcher->dispatcher();
+
 		break;
 	}
 

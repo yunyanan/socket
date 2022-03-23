@@ -37,8 +37,7 @@ struct accetpor *acceptor_init(int port)
 		goto label_acceptor_init;
 	}
 
-	acceptor->sockfd = sockfd;
-	acceptor->port	 = port;
+	acceptor->socketops = socketops;
 
 	LOGRUN("acceptor init ok");
 	return acceptor;
@@ -50,4 +49,14 @@ label_acceptor_init:
 		socketops_free(socketops);
 	}
 	return NULL;
+}
+
+void acceptor_destroy(struct acceptor *acceptor)
+{
+	if (acceptor) {
+		if (acceptor->socketops) {
+			socketops_free(acceptor->socketops);
+		}
+		free(acceptor);
+	}
 }
